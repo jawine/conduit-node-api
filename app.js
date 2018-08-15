@@ -8,7 +8,7 @@ var fs = require('fs'),
     cors = require('cors'),
     passport = require('passport'),
     errorhandler = require('errorhandler'),
-    mongoose = require('mongoose');
+    mongoose = require('mongoose')
 
 var isProduction = process.env.NODE_ENV === 'production';
 
@@ -38,7 +38,15 @@ if(isProduction){
   mongoose.set('debug', true);
 }
 
+// import mongoode models and auth config
+require('./models/User')
+require('./models/Article')
+require('./models/Comment')
+require('./config/passport')
+
+
 app.use(require('./routes'));
+
 
 /// catch 404 and forward to error handler
 app.use(function(req, res, next) {
