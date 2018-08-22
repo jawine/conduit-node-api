@@ -32,11 +32,12 @@ const UserSchema = new mongoose.Schema({
     bio: String,
     image: String,
     favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Article' }],
+    // array of IDs of followed users
+    following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     hash: String,
     salt: String
     // include createdAt and updatedAt field on model with timestamps: true
 }, { timestamps: true })
-
 
 
 // register uniqueValidator plugin
@@ -88,15 +89,18 @@ UserSchema.methods.toAuthJSON = function() {
 }
 
 // return json representation of public user data (no private data returned)
-UserSchema.methods.toProfileJSONFor = function(user) {
+// param - when supplied with a user object (i.e. when profile is requested by an authenticated user),
+// check if that user is following the queried user
+// toProfileJSONFor will be called with false if auth payload not supplied
+UserSchema.methods.toProfileJSONFor = function(followerUser) {
     return {
         username: this.username,
         bio: this.bio,
         // if user is viewing own profile (through GET /api/user and doesn't have image set, returns null,
         // however if user is viewing another profile without image set, return default placeholder 
         image: this.image || 'https://static.productionready.io/images/smiley-cyrus.jpg',
-        // following functionality to be implemented later
-        following: false
+        // check if provided user object is following the queried user
+        following: followerUser ? followerUser.isFollowing(this._id) : false
     }
 }
 
@@ -125,6 +129,30 @@ UserSchema.methods.isFavorite = function(id) {
     })
 }
 
+// follow another user
+UserSchema.methods.follow = function(userID) {
+    if(this.following.indexOf(userID) === -1) {
+        this.following.push(userID)
+    }
+
+    return this.save()
+}
+
+// unfollow another user
+UserSchema.methods.unfollow = function(userID) {
+    this.following.remove(userID)
+
+    return this.save()
+}
+
+// check if following another user - bool
+UserSchema.methods.isFollowing = function(userID) {
+    if(this.following.indexOf(userID) !== -1) {
+        return true
+    }
+
+    return false
+}
 
 // register schema with mongoose
 // model can be accessed anywhere in application with mongoose.model('User')
