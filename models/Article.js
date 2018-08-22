@@ -87,12 +87,10 @@ ArticleSchema.methods.addComment = function(comment) {
 }
 
 // delete the comment from the comments array
-ArticleSchema.methods.removeComment = function(comment) {
+ArticleSchema.methods.removeComment = function(commentID) {
 
-    if(this.comments.indexOf(comment) !== -1) {
-        this.comments.remove(comment)
-    }
-
+    this.comments.remove(commentID)
+    
     return this.save()
 }
 

@@ -222,4 +222,24 @@ router.get('/:article/comments', auth.optional, function(req, res, next) {
     }).catch(next)
 })
 
+// endpoint to delete a comment on an article
+// DELETE /api/articles/:article/comments/:comment
+router.delete('/:article/comments/:comment', auth.required, function(req, res, next) {
+    // confirm the client's token id matches the id of the comment author (only author of comment can delete own comment)
+    if(req.comment.author.toString() === req.payload.id.toString()) {
+        // Article.methods.removeComment removes the comment from the comments array then saves the article
+        req.article.removeComment(req.comment._id)
+            // find the comment by its ID and remove it
+            .then(Comment.find({ _id: req.comment._id }).remove().exec())
+            .then(function() {
+                // difference between return res.sendStatus() and res.sendStatus() ??
+                return res.sendStatus(204)
+            })
+    } else {
+        // forbidden
+        return res.sendStatus(403)
+    }
+})
+
+
 module.exports = router
