@@ -8,6 +8,8 @@ router.use('/user', require('./user'))
 router.use('/profiles', require('./profiles'))
 // register /articles router
 router.use('/articles', require('./articles'))
+// register /tags router
+router.use('/tags', require('./tags'))
 
 // error handler for validation errors from mongoose, return 422
 router.use(function(err, req, res, next) {
