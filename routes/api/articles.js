@@ -33,6 +33,134 @@ router.param('comment', function(req, res, next, id) {
         }).catch(next)
 })
 
+// endpoint to list all articles for a list/feed, optionally filtered by query params
+// GET /api/articles
+router.get('/', auth.optional, function(req, res, next) {
+
+    // query - empty object that will have properties added based on optional query params 
+    // limit - max number of articles returned - default 20
+    // offset - number of articles to skip in a query - used by frontend for pagination - default 0
+    let query = {}
+    let limit = 20
+    let offset = 0
+
+    // check if limit and offset values are specified in query string, defaults will be used if not
+    if (req.query.limit !== 'undefined') {
+        limit = req.query.limit
+    }
+
+    if (req.query.offset !== 'undefined') {
+        offset = req.query.offset
+    }
+
+    // if ?tag query param is provided, 
+    // update the query object with a new property to find any articles with the provided tag in their tagList
+    if (req.query.tag !== 'undefined') {
+        query.tagList = { '$in': [req.query.tag] }        
+    }
+
+    // use Promise.all([]) to lookup the author user and favorited user if provided in the query params, then update the query object
+    Promise.all([
+        req.query.author ? User.findOne({ username: req.query.author }) : null,
+        req.query.favorited ? User.findOne({ username: req.query.favorited }) : null
+    ]).then(function(results) {
+        let author = results[0]
+        let favoriter = results[1]
+
+        if(author) {
+            query.author = author._id
+        }
+
+        if(favoriter) {
+            query._id = { $in: favoriter.favorites }
+            // if req.query.favorited was provided but user could not be found, return empty list
+        } else if(req.query.favorited) {
+            query._id = { $in: [] }
+        }
+
+        // use Promise.all to ensure the query is executed, the total article count is retrieved, 
+        // and the user object (if auth payload was provided) is retrieved,
+        // then return the response with the desired query
+        return Promise.all([
+            // search the Article collection with the specified limit and offset
+            // sort descending by created date
+            // populate references to author user
+            Article.find(query)
+                .limit(Number(limit))
+                .skip(Number(offset))
+                .sort({ createdAt: 'desc' })
+                .populate('author')
+                .exec(),
+
+            // get count of all documents in Article collection matching query for frontend pagination
+            // don't consider limit or offset values
+            Article.count(query).exec(),
+
+            // is there an option for finding the query and the count in fewer operations? executing query twice is expensive
+
+            // if request was sent by authenticated user, store reference to their user object, otherwise set to null
+            req.payload ? User.findById(req.payload.id) : null
+        ]).then(function(results) {
+            // results array from Promise.all()
+            // results[0] will be an array of the retrieved articles
+            let articles = results[0]
+            // results[1] will be the count of the queried articles
+            let articlesCount = results[1]
+            // results[2] will be the user if available, otherwise null
+            let user = results[2]
+
+            return res.json({
+                
+                // return array containing JSON of all articles
+                articles: articles.map((article) => {
+                    return article.toJSONFor(user)
+                }),
+                
+                articlesCount: articlesCount
+            })
+        })
+    }).catch(next)
+})
+
+// feed endpoint, list all articles by authors the user is following
+// GET /api/articles/feed
+router.get('/feed', auth.required, function(req, res, next) {
+    
+    let limit = 20
+    let offset = 0
+
+    if(typeof req.query.limit !== 'undefined') {
+        limit = req.query.limit
+    }
+
+    if(typeof req.query.offset !== 'undefined') {
+        offset = req.query.offset
+    }
+
+    User.findById(req.payload.id).then(function(user) {
+        if(!user) { return res.sendStatus(401) }
+
+        Promise.all([
+            Article.find({ author: { $in: user.following } })
+                .limit(Number(limit))
+                .skip(Number(offset))
+                .populate('author')
+                .exec(),
+            Article.count({ author: { $in: user.following } })
+        ]).then(function(results) {
+            let articles = results[0]
+            let articlesCount = results[1]
+
+            return res.json({
+                articles: articles.map(function(article) {
+                    return article.toJSONFor(user)
+                }),
+                articlesCount: articlesCount
+            })
+        }).catch(next)
+    })
+})
+
 
 // endpoint to create an article
 // POST /api/articles
